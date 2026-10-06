@@ -1,0 +1,20 @@
+# Local Xcode settings, build output, signing material and generated workflows.
+xcuserdata/
+.DS_Store
+.context/
+.build/
+.swiftpm/
+DerivedData/
+build/
+docs/build/
+__pycache__/
+*.xcresult
+*.xcarchive
+*.ipa
+*.dSYM
+*.dSYM.zip
+Config/Signing.local.xcconfig
+*.mobileprovision
+*.p12
+*.cer
+*.shortcut

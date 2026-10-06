@@ -1,0 +1,15 @@
+{
+  "images" : [
+    {
+      "filename" : "sprig.pdf",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "quiet",
+    "version" : 1
+  },
+  "properties" : {
+    "preserves-vector-representation" : true
+  }
+}
