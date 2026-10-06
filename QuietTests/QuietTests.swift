@@ -1058,7 +1058,8 @@ private final class NativeScheduler: ActivityScheduling {
   func testGivenSyntheticPIN_WhenDerived_ThenMatchesPBKDF2Vector() throws {
     let key = try PINStore.derive(TestPIN.derivation, salt: Data(repeating: 7, count: 32), rounds: 100_000)
     let hex = key.map { String(format: "%02x", $0) }.joined()
-    XCTAssertEqual(hex, "937d91090a379bdb7e1b388b039c1e1b9fb0216d5292f069e780cc10d17a99bb")
+    // Independently calculated with Python's hashlib.pbkdf2_hmac for this synthetic input.
+    XCTAssertEqual(hex, "0168827974bdd10c4a870d5974b9d830a665081c8deaabc9e68cc349c69137f1")
     XCTAssertNotEqual(
       key, try PINStore.derive(TestPIN.alternate, salt: Data(repeating: 7, count: 32), rounds: 100_000))
   }
