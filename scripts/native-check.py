@@ -32,6 +32,7 @@ if lane in ('test', 'ui'):
         identifier = candidates[0]['udid']
     command += ['-destination', f'platform=iOS Simulator,id={identifier}', '-parallel-testing-enabled', 'NO', 'test']
     if lane == 'ui': command += ['-only-testing:QuietUITests']
+    subprocess.run(['xcrun', 'simctl', 'bootstatus', identifier, '-b'], check=True)
 elif lane == 'debug':
     command += ['-destination', 'generic/platform=iOS', 'build']
 elif lane == 'release':

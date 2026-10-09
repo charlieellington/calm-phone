@@ -2,14 +2,7 @@
 """Deliver synthetic UI-test URLs to a running simulator app, without XCTest relaunching it."""
 import argparse, json, pathlib, subprocess, time
 
-import plistlib
-project_root = pathlib.Path(__file__).resolve().parents[1]
-project_objects = plistlib.loads((project_root / 'Quiet.xcodeproj/project.pbxproj').read_bytes())['objects']
-def bundle_for(target_name):
-    target = next(v for v in project_objects.values()
-                  if v.get('isa') == 'PBXNativeTarget' and v['name'] == target_name)
-    configuration = project_objects[target['buildConfigurationList']]['buildConfigurations'][0]
-    return project_objects[configuration]['buildSettings']['PRODUCT_BUNDLE_IDENTIFIER']
+from simulator_test_support import app_container, bundle_for
 parser = argparse.ArgumentParser()
 parser.add_argument('--simulator', required=True)
 parser.add_argument('--output', required=True)
@@ -20,8 +13,7 @@ started = time.time()
 receipts = []
 seen = set()
 def container(bundle):
-    result = subprocess.run(['xcrun', 'simctl', 'get_app_container', args.simulator, bundle, 'data'], capture_output=True, text=True)
-    return pathlib.Path(result.stdout.strip()) if result.returncode == 0 else None
+    return app_container(args.simulator, bundle)
 while time.time() - started < 3000:
     runner = container(bundle_for('QuietUITests') + '.xctrunner')
     if runner:

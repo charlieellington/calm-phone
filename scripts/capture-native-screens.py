@@ -7,14 +7,7 @@ import subprocess
 import time
 
 
-import plistlib
-project_root = Path(__file__).resolve().parents[1]
-project_objects = plistlib.loads((project_root / 'Quiet.xcodeproj/project.pbxproj').read_bytes())['objects']
-def bundle_for(target_name):
-    target = next(v for v in project_objects.values()
-                  if v.get('isa') == 'PBXNativeTarget' and v['name'] == target_name)
-    configuration = project_objects[target['buildConfigurationList']]['buildConfigurations'][0]
-    return project_objects[configuration]['buildSettings']['PRODUCT_BUNDLE_IDENTIFIER']
+from simulator_test_support import app_container, bundle_for
 parser = argparse.ArgumentParser()
 parser.add_argument('--simulator', required=True)
 parser.add_argument('--output', required=True)
@@ -32,11 +25,9 @@ events = None
 # from that request, while keeping a separate bounded startup wait.
 while time.monotonic() < (capture_deadline or startup_deadline):
     if events is None or not events.parent.exists():
-        container = subprocess.run(['xcrun', 'simctl', 'get_app_container', args.simulator,
-                                    bundle_for('Quiet'), 'data'], capture_output=True, text=True,
-                                   timeout=30)
-        if container.returncode == 0:
-            events = Path(container.stdout.strip()) / 'Documents' / 'NativeScreenCapture'
+        container = app_container(args.simulator, bundle_for('Quiet'))
+        if container is not None:
+            events = container / 'Documents' / 'NativeScreenCapture'
     if events is not None:
         for ready in sorted(events.glob('*/calm-*.ready')):
             if ready.stat().st_mtime < started or str(ready) in seen:
