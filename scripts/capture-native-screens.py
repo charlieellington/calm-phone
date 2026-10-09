@@ -22,9 +22,14 @@ args = parser.parse_args()
 output = Path(args.output).resolve()
 output.mkdir(parents=True, exist_ok=True)
 started = time.time()
+startup_deadline = time.monotonic() + 1800
+capture_deadline = None
 seen = set()
 receipts = []
-while time.time() - started < 240:
+# A fresh public clone may spend several minutes building and launching the
+# simulator before XCTest requests its first capture. Budget the capture phase
+# from that request, while keeping a separate bounded startup wait.
+while time.monotonic() < (capture_deadline or startup_deadline):
     container = subprocess.run(['xcrun', 'simctl', 'get_app_container', args.simulator,
                                 bundle_for('Quiet'), 'data'], capture_output=True, text=True)
     if container.returncode == 0:
@@ -35,6 +40,8 @@ while time.time() - started < 240:
             name = ready.stem
             if not name.startswith('calm-') or not all(c.isalnum() or c in '-_' for c in name):
                 raise RuntimeError('Invalid test screenshot name')
+            if capture_deadline is None:
+                capture_deadline = time.monotonic() + 240
             destination = output / (name + '.png')
             subprocess.run(['xcrun', 'simctl', 'io', args.simulator, 'screenshot', str(destination)],
                            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -48,4 +55,6 @@ while time.time() - started < 240:
             print(f'Captured {len(receipts)} native compositor screenshots', flush=True)
             raise SystemExit(0 if receipts else 1)
     time.sleep(0.15)
-raise SystemExit('Native screenshot requests did not complete within 240 seconds')
+if capture_deadline is None:
+    raise SystemExit('Native screenshot requests did not start within 1800 seconds')
+raise SystemExit('Native screenshot requests did not complete within 240 seconds of the first request')
