@@ -236,7 +236,8 @@ final class RemoteUnlockTests: XCTestCase {
       let https = RemoteLink.url(kind, token: token)
       let fragment = try XCTUnwrap(URLComponents(url: https, resolvingAgainstBaseURL: false)?.fragment)
       // The existing browser uses encodeURIComponent: no query delimiters may survive in the token.
-      let unreserved = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.!~*'()")
+      let unreserved = CharacterSet(
+        charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.!~*'()")
       let encoded = try XCTUnwrap(fragment.addingPercentEncoding(withAllowedCharacters: unreserved))
       let fallback = try XCTUnwrap(URL(string: "quiet://\(kind.rawValue)?t=\(encoded)"))
       let parsed = try XCTUnwrap(RemoteLink.parse(fallback))
@@ -267,7 +268,8 @@ final class RemoteUnlockTests: XCTestCase {
     XCTAssertTrue(h.projections.last!.isOpen)
     XCTAssertThrowsError(
       try h.coordinator.grant(
-        GrantDraft.prepare(.hour, now: h.clock.now), authorization: verified.authorization, remoteName: "Helper"
+        GrantDraft.prepare(.hour, now: h.clock.now), authorization: verified.authorization,
+        remoteName: "Helper"
       ))
     try h.coordinator.lockNow()
     XCTAssertNil(try h.database.load().openLease)
