@@ -26,14 +26,18 @@ startup_deadline = time.monotonic() + 1800
 capture_deadline = None
 seen = set()
 receipts = []
+events = None
 # A fresh public clone may spend several minutes building and launching the
 # simulator before XCTest requests its first capture. Budget the capture phase
 # from that request, while keeping a separate bounded startup wait.
 while time.monotonic() < (capture_deadline or startup_deadline):
-    container = subprocess.run(['xcrun', 'simctl', 'get_app_container', args.simulator,
-                                bundle_for('Quiet'), 'data'], capture_output=True, text=True)
-    if container.returncode == 0:
-        events = Path(container.stdout.strip()) / 'Documents' / 'NativeScreenCapture'
+    if events is None or not events.parent.exists():
+        container = subprocess.run(['xcrun', 'simctl', 'get_app_container', args.simulator,
+                                    bundle_for('Quiet'), 'data'], capture_output=True, text=True,
+                                   timeout=30)
+        if container.returncode == 0:
+            events = Path(container.stdout.strip()) / 'Documents' / 'NativeScreenCapture'
+    if events is not None:
         for ready in sorted(events.glob('*/calm-*.ready')):
             if ready.stat().st_mtime < started or str(ready) in seen:
                 continue
@@ -43,13 +47,19 @@ while time.monotonic() < (capture_deadline or startup_deadline):
             if capture_deadline is None:
                 capture_deadline = time.monotonic() + 240
             destination = output / (name + '.png')
+            capture_started = time.monotonic()
+            print(f'{name}: capture started at {time.time():.3f}', flush=True)
             subprocess.run(['xcrun', 'simctl', 'io', args.simulator, 'screenshot', str(destination)],
-                           check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                           check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                           timeout=45)
             # Attach the compositor image to the same XCTest result that requested it.
             (ready.parent / (name + '.png')).write_bytes(destination.read_bytes())
             (ready.parent / (name + '.ack')).write_text('captured\n')
             seen.add(str(ready))
-            receipts.append({'name': name, 'file': destination.name, 'request': json.loads(ready.read_text())})
+            elapsed = time.monotonic() - capture_started
+            receipts.append({'name': name, 'file': destination.name,
+                             'capture_seconds': elapsed, 'request': json.loads(ready.read_text())})
+            print(f'{name}: acknowledged after {elapsed:.3f}s', flush=True)
             (output / 'capture-manifest.json').write_text(json.dumps(receipts, indent=2))
         if any(p.stat().st_mtime >= started for p in events.glob('*/complete')):
             print(f'Captured {len(receipts)} native compositor screenshots', flush=True)

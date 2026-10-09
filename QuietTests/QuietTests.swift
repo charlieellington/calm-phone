@@ -923,7 +923,9 @@ final class MemoryConnectionStore: ConnectionStoring {
         "name": name, "dynamicType": String(describing: size),
         "systemAppearance": system == .light ? "light" : "dark",
       ]).write(to: ready, options: .atomic)
-      for _ in 0..<150 {
+      // Allow the bounded simulator capture command to finish on a busy CI host.
+      // The view stays presented until the compositor image is acknowledged.
+      for _ in 0..<600 {
         if FileManager.default.fileExists(atPath: ack.path) { break }
         try await Task.sleep(for: .milliseconds(100))
       }
