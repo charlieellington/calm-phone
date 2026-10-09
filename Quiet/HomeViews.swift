@@ -4,6 +4,7 @@ import SwiftUI
 
 enum RestrictionPresentation: Equatable {
   case setupUnavailable, checking, finishSetup, permissionNeeded, checkRestrictions, freshSetup
+  case firstLaunch, unlockOthers, remoteUnavailable
   case locked
   case active(Date)
 }
@@ -28,6 +29,9 @@ struct StatusView: View {
                   .foregroundStyle(QuietDesign.muted)
               }
               Text("Everything").font(.title3)
+              if let name = model.activeLease?.remoteName {
+                Text("Unlocked by \(name).").foregroundStyle(QuietDesign.muted)
+              }
             } else {
               Text("Locked").font(.system(size: heroSize, weight: .medium))
               Text("App restrictions on.").font(.title3)
@@ -131,7 +135,15 @@ struct SettingsView: View {
         NavigationLink("Apps and limits") { AppsAndLimitsView() }
         NavigationLink("History") { HistoryDestinationView() }
         NavigationLink("Colour") { ColourView() }
-        Button("Change the PIN") { model.replacePIN() }
+        NavigationLink {
+          UnlockMethodsView()
+        } label: {
+          LabeledContent(
+            "Unlock methods", value: (["PIN"] + model.remotes.remotes.map(\.name)).joined(separator: " · "))
+        }
+        if !model.connections.connections.isEmpty {
+          NavigationLink("Unlock others") { UnlockOthersView() }
+        }
       }.listRowBackground(QuietDesign.surface)
       Section {
         Text(

@@ -179,6 +179,10 @@
 				<string>AA000000000000000000001C</string>
 				<string>DD0000000000000000000001</string>
 				<string>DD0000000000000000000002</string>
+				<string>EE0000000000000000000002</string>
+				<string>EE0000000000000000000004</string>
+				<string>EE0000000000000000000006</string>
+				<string>EE0000000000000000000008</string>
 			</array>
 			<key>sourceTree</key>
 			<string>&lt;group&gt;</string>
@@ -399,6 +403,10 @@
 				<string>DE0000000000000000000000</string>
 				<string>DE000000000000000000000A</string>
 				<string>DE0000000000000000000014</string>
+				<string>EE0000000000000000000003</string>
+				<string>EE0000000000000000000005</string>
+				<string>EE0000000000000000000007</string>
+				<string>EE0000000000000000000009</string>
 			</array>
 			<key>runOnlyForDeploymentPostprocessing</key>
 			<integer>0</integer>
@@ -446,7 +454,7 @@
 				<key>GENERATE_INFOPLIST_FILE</key>
 				<string>YES</string>
 				<key>CURRENT_PROJECT_VERSION</key>
-				<string>6</string>
+				<string>7</string>
 				<key>MARKETING_VERSION</key>
 				<string>1.0</string>
 				<key>LD_RUNPATH_SEARCH_PATHS</key>
@@ -500,7 +508,7 @@
 				<key>GENERATE_INFOPLIST_FILE</key>
 				<string>YES</string>
 				<key>CURRENT_PROJECT_VERSION</key>
-				<string>6</string>
+				<string>7</string>
 				<key>MARKETING_VERSION</key>
 				<string>1.0</string>
 				<key>LD_RUNPATH_SEARCH_PATHS</key>
@@ -724,7 +732,7 @@
 				<key>GENERATE_INFOPLIST_FILE</key>
 				<string>YES</string>
 				<key>CURRENT_PROJECT_VERSION</key>
-				<string>6</string>
+				<string>7</string>
 				<key>MARKETING_VERSION</key>
 				<string>1.0</string>
 				<key>LD_RUNPATH_SEARCH_PATHS</key>
@@ -776,7 +784,7 @@
 				<key>GENERATE_INFOPLIST_FILE</key>
 				<string>YES</string>
 				<key>CURRENT_PROJECT_VERSION</key>
-				<string>6</string>
+				<string>7</string>
 				<key>MARKETING_VERSION</key>
 				<string>1.0</string>
 				<key>LD_RUNPATH_SEARCH_PATHS</key>
@@ -985,7 +993,7 @@
 				<key>GENERATE_INFOPLIST_FILE</key>
 				<string>YES</string>
 				<key>CURRENT_PROJECT_VERSION</key>
-				<string>6</string>
+				<string>7</string>
 				<key>MARKETING_VERSION</key>
 				<string>1.0</string>
 				<key>LD_RUNPATH_SEARCH_PATHS</key>
@@ -1037,7 +1045,7 @@
 				<key>GENERATE_INFOPLIST_FILE</key>
 				<string>YES</string>
 				<key>CURRENT_PROJECT_VERSION</key>
-				<string>6</string>
+				<string>7</string>
 				<key>MARKETING_VERSION</key>
 				<string>1.0</string>
 				<key>LD_RUNPATH_SEARCH_PATHS</key>
@@ -1211,7 +1219,7 @@
 				<key>GENERATE_INFOPLIST_FILE</key>
 				<string>YES</string>
 				<key>CURRENT_PROJECT_VERSION</key>
-				<string>6</string>
+				<string>7</string>
 				<key>MARKETING_VERSION</key>
 				<string>1.0</string>
 				<key>LD_RUNPATH_SEARCH_PATHS</key>
@@ -1263,7 +1271,7 @@
 				<key>GENERATE_INFOPLIST_FILE</key>
 				<string>YES</string>
 				<key>CURRENT_PROJECT_VERSION</key>
-				<string>6</string>
+				<string>7</string>
 				<key>MARKETING_VERSION</key>
 				<string>1.0</string>
 				<key>LD_RUNPATH_SEARCH_PATHS</key>
@@ -1477,7 +1485,7 @@
 				<key>GENERATE_INFOPLIST_FILE</key>
 				<string>YES</string>
 				<key>CURRENT_PROJECT_VERSION</key>
-				<string>6</string>
+				<string>7</string>
 				<key>MARKETING_VERSION</key>
 				<string>1.0</string>
 				<key>LD_RUNPATH_SEARCH_PATHS</key>
@@ -1529,7 +1537,7 @@
 				<key>GENERATE_INFOPLIST_FILE</key>
 				<string>YES</string>
 				<key>CURRENT_PROJECT_VERSION</key>
-				<string>6</string>
+				<string>7</string>
 				<key>MARKETING_VERSION</key>
 				<string>1.0</string>
 				<key>LD_RUNPATH_SEARCH_PATHS</key>
@@ -1629,6 +1637,7 @@
 			<key>children</key>
 			<array>
 				<string>BB00000000000000000001F4</string>
+				<string>EE000000000000000000000A</string>
 			</array>
 			<key>sourceTree</key>
 			<string>&lt;group&gt;</string>
@@ -1642,6 +1651,7 @@
 			<key>files</key>
 			<array>
 				<string>BB00000000000000000001F5</string>
+				<string>EE000000000000000000000B</string>
 			</array>
 			<key>runOnlyForDeploymentPostprocessing</key>
 			<integer>0</integer>
@@ -1666,7 +1676,9 @@
 			<key>buildActionMask</key>
 			<integer>2147483647</integer>
 			<key>files</key>
-			<array/>
+			<array>
+				<string>CD0000000000000000000002</string>
+			</array>
 			<key>runOnlyForDeploymentPostprocessing</key>
 			<integer>0</integer>
 		</dict>
@@ -1709,7 +1721,7 @@
 				<key>GENERATE_INFOPLIST_FILE</key>
 				<string>YES</string>
 				<key>CURRENT_PROJECT_VERSION</key>
-				<string>6</string>
+				<string>7</string>
 				<key>MARKETING_VERSION</key>
 				<string>1.0</string>
 				<key>LD_RUNPATH_SEARCH_PATHS</key>
@@ -1759,7 +1771,7 @@
 				<key>GENERATE_INFOPLIST_FILE</key>
 				<string>YES</string>
 				<key>CURRENT_PROJECT_VERSION</key>
-				<string>6</string>
+				<string>7</string>
 				<key>MARKETING_VERSION</key>
 				<string>1.0</string>
 				<key>LD_RUNPATH_SEARCH_PATHS</key>
@@ -1937,7 +1949,7 @@
 				<key>GENERATE_INFOPLIST_FILE</key>
 				<string>YES</string>
 				<key>CURRENT_PROJECT_VERSION</key>
-				<string>6</string>
+				<string>7</string>
 				<key>MARKETING_VERSION</key>
 				<string>1.0</string>
 				<key>LD_RUNPATH_SEARCH_PATHS</key>
@@ -1983,7 +1995,7 @@
 				<key>GENERATE_INFOPLIST_FILE</key>
 				<string>YES</string>
 				<key>CURRENT_PROJECT_VERSION</key>
-				<string>6</string>
+				<string>7</string>
 				<key>MARKETING_VERSION</key>
 				<string>1.0</string>
 				<key>LD_RUNPATH_SEARCH_PATHS</key>
@@ -2389,6 +2401,114 @@
 			<string>PBXBuildFile</string>
 			<key>fileRef</key>
 			<string>DD0000000000000000000002</string>
+		</dict>
+		<key>EE0000000000000000000002</key>
+		<dict>
+			<key>isa</key>
+			<string>PBXFileReference</string>
+			<key>lastKnownFileType</key>
+			<string>sourcecode.swift</string>
+			<key>path</key>
+			<string>Quiet/RemoteStores.swift</string>
+			<key>sourceTree</key>
+			<string>SOURCE_ROOT</string>
+		</dict>
+		<key>EE0000000000000000000003</key>
+		<dict>
+			<key>isa</key>
+			<string>PBXBuildFile</string>
+			<key>fileRef</key>
+			<string>EE0000000000000000000002</string>
+		</dict>
+		<key>EE0000000000000000000004</key>
+		<dict>
+			<key>isa</key>
+			<string>PBXFileReference</string>
+			<key>lastKnownFileType</key>
+			<string>sourcecode.swift</string>
+			<key>path</key>
+			<string>Quiet/RemoteModel.swift</string>
+			<key>sourceTree</key>
+			<string>SOURCE_ROOT</string>
+		</dict>
+		<key>EE0000000000000000000005</key>
+		<dict>
+			<key>isa</key>
+			<string>PBXBuildFile</string>
+			<key>fileRef</key>
+			<string>EE0000000000000000000004</string>
+		</dict>
+		<key>EE0000000000000000000006</key>
+		<dict>
+			<key>isa</key>
+			<string>PBXFileReference</string>
+			<key>lastKnownFileType</key>
+			<string>sourcecode.swift</string>
+			<key>path</key>
+			<string>Quiet/RemoteViews.swift</string>
+			<key>sourceTree</key>
+			<string>SOURCE_ROOT</string>
+		</dict>
+		<key>EE0000000000000000000007</key>
+		<dict>
+			<key>isa</key>
+			<string>PBXBuildFile</string>
+			<key>fileRef</key>
+			<string>EE0000000000000000000006</string>
+		</dict>
+		<key>EE0000000000000000000008</key>
+		<dict>
+			<key>isa</key>
+			<string>PBXFileReference</string>
+			<key>lastKnownFileType</key>
+			<string>sourcecode.swift</string>
+			<key>path</key>
+			<string>Quiet/RemoteOtherViews.swift</string>
+			<key>sourceTree</key>
+			<string>SOURCE_ROOT</string>
+		</dict>
+		<key>EE0000000000000000000009</key>
+		<dict>
+			<key>isa</key>
+			<string>PBXBuildFile</string>
+			<key>fileRef</key>
+			<string>EE0000000000000000000008</string>
+		</dict>
+		<key>EE000000000000000000000A</key>
+		<dict>
+			<key>isa</key>
+			<string>PBXFileReference</string>
+			<key>lastKnownFileType</key>
+			<string>sourcecode.swift</string>
+			<key>path</key>
+			<string>QuietTests/RemoteTests.swift</string>
+			<key>sourceTree</key>
+			<string>SOURCE_ROOT</string>
+		</dict>
+		<key>EE000000000000000000000B</key>
+		<dict>
+			<key>isa</key>
+			<string>PBXBuildFile</string>
+			<key>fileRef</key>
+			<string>EE000000000000000000000A</string>
+		</dict>
+		<key>CD0000000000000000000001</key>
+		<dict>
+			<key>isa</key>
+			<string>PBXFileReference</string>
+			<key>lastKnownFileType</key>
+			<string>folder</string>
+			<key>path</key>
+			<string>.build/Build6Fixture</string>
+			<key>sourceTree</key>
+			<string>SOURCE_ROOT</string>
+		</dict>
+		<key>CD0000000000000000000002</key>
+		<dict>
+			<key>isa</key>
+			<string>PBXBuildFile</string>
+			<key>fileRef</key>
+			<string>CD0000000000000000000001</string>
 		</dict>
 	</dict>
 	<key>rootObject</key>

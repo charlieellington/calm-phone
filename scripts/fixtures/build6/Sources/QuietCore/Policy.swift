@@ -80,8 +80,6 @@ public struct Lease: Codable, Equatable, Identifiable {
   public var activatedAt: Date?
   public var endedAt: Date?
   public var relockedAt: Date?
-  public var remoteName: String?
-  public var remoteID: String?
   public var activityName: String { "quiet.lease.\(id.uuidString)" }
   public func isActive(at now: Date) -> Bool {
     state == .active && activatedAt != nil && now >= activatedAt! && now < expiresAt

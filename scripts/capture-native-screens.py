@@ -3,10 +3,18 @@
 import argparse
 import json
 from pathlib import Path
-import plistlib
 import subprocess
 import time
 
+
+import plistlib
+project_root = Path(__file__).resolve().parents[1]
+project_objects = plistlib.loads((project_root / 'Quiet.xcodeproj/project.pbxproj').read_bytes())['objects']
+def bundle_for(target_name):
+    target = next(v for v in project_objects.values()
+                  if v.get('isa') == 'PBXNativeTarget' and v['name'] == target_name)
+    configuration = project_objects[target['buildConfigurationList']]['buildConfigurations'][0]
+    return project_objects[configuration]['buildSettings']['PRODUCT_BUNDLE_IDENTIFIER']
 parser = argparse.ArgumentParser()
 parser.add_argument('--simulator', required=True)
 parser.add_argument('--output', required=True)
@@ -16,13 +24,9 @@ output.mkdir(parents=True, exist_ok=True)
 started = time.time()
 seen = set()
 receipts = []
-objects = plistlib.loads(Path('Quiet.xcodeproj/project.pbxproj').read_bytes())['objects']
-app = next(v for v in objects.values() if v.get('isa') == 'PBXNativeTarget' and v['name'] == 'Quiet')
-config = objects[app['buildConfigurationList']]['buildConfigurations'][0]
-bundle = objects[config]['buildSettings']['PRODUCT_BUNDLE_IDENTIFIER']
 while time.time() - started < 240:
     container = subprocess.run(['xcrun', 'simctl', 'get_app_container', args.simulator,
-                                bundle, 'data'], capture_output=True, text=True)
+                                bundle_for('Quiet'), 'data'], capture_output=True, text=True)
     if container.returncode == 0:
         events = Path(container.stdout.strip()) / 'Documents' / 'NativeScreenCapture'
         for ready in sorted(events.glob('*/calm-*.ready')):
