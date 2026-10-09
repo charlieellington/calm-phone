@@ -1,4 +1,7 @@
-// Appended to the unchanged build-6 UnlockInterval entity, compiled in module Quiet.
+// Synthetic build-6 stores, compiled beside the frozen UnlockInterval entity in module Quiet.
+import Foundation
+import QuietCore
+import SwiftData
 @main struct Build6Fixture {
   @MainActor static func main() throws {
     let root = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
