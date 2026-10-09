@@ -1,0 +1,78 @@
+name: Public app verification
+on:
+  push:
+    branches: [main, 'public/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: public-verification-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+jobs:
+  public:
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      QUIET_NATIVE_EVIDENCE_DIR: .build/evidence
+    defaults:
+      run:
+        shell: bash
+        working-directory: public-source
+    steps:
+      - name: Anonymous shallow clone of the proposed public revision
+        working-directory: ${{ github.workspace }}
+        env:
+          SOURCE_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          SOURCE_BRANCH: ${{ github.head_ref || github.ref_name }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          git -c credential.helper= -c http.extraheader= clone --depth 1 --single-branch --branch "$SOURCE_BRANCH" "https://github.com/$SOURCE_REPOSITORY.git" public-source
+          test "$(git -C public-source rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git -C public-source rev-list --count HEAD)" = 1
+          test "$(git -C public-source remote get-url origin)" = "https://github.com/$SOURCE_REPOSITORY.git"
+      - name: Select Xcode and record clean public source
+        run: |
+          set -euo pipefail
+          XCODE_PATH=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE_PATH"
+          python3 scripts/remote-evidence.py source
+      - name: Complete make check including five-product Debug and Release
+        run: |
+          set -euo pipefail
+          make check 2>&1 | tee .build/evidence/check.log
+      - name: Native tests, synthetic build-6 migration and actual UI navigation
+        run: |
+          set -euo pipefail
+          SIMULATOR_ID=$(xcrun simctl list devices available --json | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; c=[x for v in d.values() for x in v if x['name']=='iPhone 17 Pro']; print(c[0]['udid'])")
+          xcrun simctl boot "$SIMULATOR_ID" || true
+          QUIET_SIMULATOR_ID="$SIMULATOR_ID" make test-ios
+      - name: Small iPhone UI and accessibility
+        run: |
+          set -euo pipefail
+          RUNTIME_ID=$(xcrun simctl list runtimes --json | python3 -c "import json,sys; print([r['identifier'] for r in json.load(sys.stdin)['runtimes'] if r['isAvailable'] and 'iOS' in r['name']][-1])")
+          SMALL_ID=$(xcrun simctl create Calm-Small com.apple.CoreSimulator.SimDeviceType.iPhone-SE-3rd-generation "$RUNTIME_ID")
+          xcrun simctl boot "$SMALL_ID"
+          QUIET_SIMULATOR_ID="$SMALL_ID" make test-ui
+      - name: Fresh product inspection and unchanged source hashes
+        if: always()
+        run: python3 scripts/remote-evidence.py inspect
+      - name: Export formatting corrections after a failed check
+        if: failure()
+        run: |
+          make lint-fix
+          git diff --binary > .build/evidence/formatting.patch
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: public-verification-${{ github.event.pull_request.head.sha || github.sha }}
+          retention-days: 30
+          include-hidden-files: true
+          path: |
+            public-source/.build/evidence
+            public-source/.build/*.xcresult
+            public-source/.build/Build6Fixture
+            public-source/.build/Quiet-unsigned.xcarchive
+          if-no-files-found: error

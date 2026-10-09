@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "date": "2026-10-09",
+  "source": "User-supplied installed-app examples supporting reported use on 8 October 2026; installed revision unknown.",
+  "sanitization": "Flattened RGB PNGs with no metadata. Chat contact header/avatar and composer cropped away; all URL pixels covered by opaque rectangles. No raw links, originals or transcripts included.",
+  "layout": "App screens may sit side by side. Keep the chat at readable width (about 390 CSS px) or stack it. These are setup, result/history and message examples, not a fabricated chronological/helper walkthrough.",
+  "website_destination": "public/images/tools/calm-phone/screens/",
+  "assets": [
+    {
+      "file": "add-remote.png",
+      "role": "connection-setup",
+      "alt": "Add remote on Charlie’s phone, with Bene and Charlie entered as the two names.",
+      "caption": "One-time connection: enter the helper’s name and your name, then share the link.",
+      "width": 1206,
+      "height": 2622,
+      "sha256": "95bee636163b0f0f263889c4185790045bf8259b26194df8f5d38e149b84d602"
+    },
+    {
+      "file": "unlock-methods.png",
+      "role": "result-history",
+      "alt": "Unlock methods lists the PIN, Bene as a remote, and a last unlock on 8 October at 20:54.",
+      "caption": "Unlock methods and the last successful remote unlock; this is the resulting history view.",
+      "width": 1206,
+      "height": 2622,
+      "sha256": "90c2f4db120ff21f7c7b3b7c1491533881c699210113387ead83d898f73ea9c3"
+    },
+    {
+      "file": "whatsapp-redacted.png",
+      "role": "message-example",
+      "alt": "WhatsApp exchange showing one connection message and two 15-minute unlock messages. Private links are completely hidden and the contact header is removed.",
+      "caption": "An unlock, by message. Private links hidden.",
+      "width": 1206,
+      "height": 2104,
+      "sha256": "05f4207d01b0ebb9f41070818011d9fb9c6c0433f6152117469f98ae1a20c23c"
+    }
+  ]
+}

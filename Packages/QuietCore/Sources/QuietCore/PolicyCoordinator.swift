@@ -234,12 +234,17 @@ public final class PolicyCoordinator {
     let draft = try GrantDraft.prepare(choice, now: clock(), calendar: localCalendar(), uptime: uptime())
     try grant(draft, authorization: authorization)
   }
-  public func grant(_ draft: GrantDraft, authorization: GuardianAuthorization) throws {
+  public func grant(
+    _ draft: GrantDraft, authorization: GuardianAuthorization, remoteName: String? = nil,
+    remoteID: String? = nil
+  ) throws {
     let now = clock()
     try authorization.consume(.lease, now: now)
     guard draft.observedAt >= authorization.issuedAt else { throw QuietError.expiredAuthorization }
     try draft.validate(now: now, calendar: localCalendar(), uptime: uptime())
-    let lease = Lease(now: draft.requestedAt, expiresAt: draft.expiresAt)
+    var lease = Lease(now: draft.requestedAt, expiresAt: draft.expiresAt)
+    lease.remoteName = remoteName
+    lease.remoteID = remoteID
     try database.update(
       { state in
         state.reconcile(now: now, approved: approved())

@@ -21,7 +21,15 @@ if sys.argv[1] == 'signing':
         name = target['name']
         entitlement = plistlib.loads(Path(f'{name}/{name}.entitlements').read_bytes())
         assert entitlement['com.apple.security.application-groups'] == group
-        assert set(entitlement) <= {'com.apple.security.application-groups', 'com.apple.developer.family-controls'}
+        allowed = {'com.apple.security.application-groups', 'com.apple.developer.family-controls'}
+        if name == 'Quiet':
+            from_host = re.search(r'public static let host = "([^"]+)"',
+                                 Path('Packages/QuietCore/Sources/QuietCore/RemoteUnlock.swift').read_text())
+            assert from_host, 'Remote link host missing'
+            domains = entitlement['com.apple.developer.associated-domains']
+            assert domains == ['applinks:' + from_host[1], 'applinks:' + from_host[1] + '?mode=developer']
+            allowed.add('com.apple.developer.associated-domains')
+        assert set(entitlement) <= allowed
         source_files = []
         for phase_id in target['buildPhases']:
             phase = objects[phase_id]
@@ -39,7 +47,7 @@ if sys.argv[1] == 'signing':
             assert settings['CODE_SIGN_ENTITLEMENTS'] == f'{name}/{name}.entitlements'
     config = Path('Config/Base.xcconfig').read_text()
     assert 'IPHONEOS_DEPLOYMENT_TARGET = 18.5' in config and 'TARGETED_DEVICE_FAMILY = 1' in config
-    print('PASS: five iPhone products, consistent bundle IDs/App Group, iOS18.5, Family Controls on enforcing targets, no saved team/profiles or extra capabilities. Signed products NOT checked.')
+    print('PASS: five iPhone products, consistent bundle IDs/App Group, iOS18.5, Family Controls on enforcing targets, app-only associated domains, no saved team/profiles or extra capabilities. Signed products NOT checked.')
 else:
     folders = ['Quiet', 'QuietShared', 'QuietMonitor', 'QuietWidget', 'QuietShieldConfig', 'QuietShieldAction']
     sources = {str(f): f.read_text() for folder in folders for f in Path(folder).rglob('*.swift')}

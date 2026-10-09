@@ -17,7 +17,7 @@ enum TestPIN {
   static let alternate = String(repeating: "9", count: 6)
 }
 
-private final class FixtureCredentials: CredentialStorage {
+final class FixtureCredentials: CredentialStorage {
   var credential: Credential?
   var afterEnrollment: (() throws -> Void)?
   func read() throws -> Credential? { credential }
@@ -27,34 +27,69 @@ private final class FixtureCredentials: CredentialStorage {
   }
 }
 
-private final class NativeClock {
+final class NativeClock {
   var now = Date(timeIntervalSince1970: 1_800_000_000)
 }
 
-private final class NativeScheduler: ActivityScheduling {
+final class NativeScheduler: ActivityScheduling {
   var names: [String] = []
   var failDaily = false
+  var failLease = false
   var dailyAttempts = 0
   func registerDaily(_ policy: Policy) throws {
     dailyAttempts += 1
     if failDaily { throw QuietError.unavailable }
     names.append(policy.dailyName)
   }
-  func registerLease(_ lease: Lease) throws { names.append(lease.activityName) }
+  func registerLease(_ lease: Lease) throws {
+    if failLease { throw QuietError.unavailable }
+    names.append(lease.activityName)
+  }
   func isRegistered(_ name: String) -> Bool { names.contains(name) }
   func stop(_ old: [String]) { names.removeAll { old.contains($0) } }
 }
 
-@MainActor private final class NativeHarness {
+/// Remote unlock records held in memory so native tests never touch the simulator Keychain.
+final class MemoryRemoteStore: RemoteStorage {
+  var record: RemoteRecord?
+  var failRead = false
+  var failWrite = false
+  var failAfterWrites: Int?
+  var writes = 0
+  func read() throws -> RemoteRecord? {
+    if failRead { throw QuietError.unavailable }
+    return record
+  }
+  func write(_ record: RemoteRecord) throws {
+    if failWrite || failAfterWrites.map({ writes >= $0 }) == true { throw QuietError.unavailable }
+    writes += 1
+    self.record = record
+  }
+}
+
+final class MemoryConnectionStore: ConnectionStoring {
+  var record = ConnectionRecord()
+  var failRead = false
+  func read() throws -> ConnectionRecord {
+    if failRead { throw QuietError.unavailable }
+    return record
+  }
+  func write(_ record: ConnectionRecord) throws { self.record = record }
+}
+
+@MainActor final class NativeHarness {
   let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
   let clock = NativeClock()
   let credentials = FixtureCredentials()
   let scheduler = NativeScheduler()
+  let remotes = MemoryRemoteStore()
+  let connections = MemoryConnectionStore()
   var isApproved = true
   var unresolvedApproval = false
   var diagnosedRecovery = false
   var failAuthorization = false
   var authorizationRequests = 0
+  var authorizationWait: (() async -> Void)?
   var projections: [ShieldProjection] = []
   var failProjection = false
   var database: ControlDatabase?
@@ -122,10 +157,11 @@ private final class NativeScheduler: ActivityScheduling {
       screenTimeApproval: { self.unresolvedApproval ? nil : self.isApproved },
       requestScreenTimeAuthorization: {
         self.authorizationRequests += 1
+        await self.authorizationWait?()
         if self.failAuthorization { throw QuietError.unavailable }
         self.isApproved = true
         self.unresolvedApproval = false
-      })
+      }, remoteStore: remotes, connectionStore: connections)
   }
   func grant() throws {
     try coordinator!.grant(.quarterHour, authorization: pin.verify(TestPIN.primary, operation: .lease))
@@ -887,7 +923,9 @@ private final class NativeScheduler: ActivityScheduling {
         "name": name, "dynamicType": String(describing: size),
         "systemAppearance": system == .light ? "light" : "dark",
       ]).write(to: ready, options: .atomic)
-      for _ in 0..<150 {
+      // Allow the bounded simulator capture command to finish on a busy CI host.
+      // The view stays presented until the compositor image is acknowledged.
+      for _ in 0..<600 {
         if FileManager.default.fileExists(atPath: ack.path) { break }
         try await Task.sleep(for: .milliseconds(100))
       }
@@ -922,6 +960,41 @@ private final class NativeScheduler: ActivityScheduling {
     try await capture(AppsAndLimitsView(), "apps-and-limits")
     try await capture(AllowedAppsView(), "allowed-apps")
     XCTAssertEqual(try h.database!.load(), before)
+    // Remote unlock on this phone (review chapter 9).
+    try await capture(UnlockMethodsView(), "unlock-methods-pin-only")
+    try await capture(AddRemoteView(message: .constant("")), "add-remote")
+    let pairedRemote = try model.addRemote(name: "Helper", ownerName: "Owner")
+    try await capture(SettingsView(), "settings-with-remote")
+    try await capture(UnlockMethodsView(), "unlock-methods")
+    try await capture(RemoteDetailView(remote: pairedRemote, message: .constant("")), "remote-detail")
+    // Their phone (review chapter 10): first launch, connected, unlock others.
+    let other = try NativeHarness(completedSetup: false, now: h.clock.now)
+    defer { other.cleanUp() }
+    let theirs = other.model()
+    XCTAssertEqual(theirs.presentation, .firstLaunch)
+    try await capture(FirstLaunchView().environmentObject(theirs), "first-launch")
+    try await capture(
+      FirstLaunchView().environmentObject(theirs), "first-launch-accessibility5", size: .accessibility5)
+    theirs.open(model.connectURL(for: pairedRemote))
+    let connected = try XCTUnwrap(theirs.linkOutcome)
+    try await capture(
+      ConnectedView(outcome: connected).environmentObject(theirs), "connected", navigation: false)
+    theirs.linkOutcome = nil
+    XCTAssertEqual(theirs.presentation, .unlockOthers)
+    try await capture(UnlockOthersView().environmentObject(theirs), "unlock-others")
+    try await capture(
+      UnlockOthersView().environmentObject(theirs), "unlock-others-accessibility5-bottom",
+      size: .accessibility5,
+      scrollToBottom: true)
+    // Back on this phone: the link unlocks everything, attributed to Helper, and Lock now needs no PIN.
+    let connection = try XCTUnwrap(theirs.connections.connections.first)
+    model.open(try theirs.unlockURL(for: connection, choice: .hour))
+    XCTAssertNil(model.error)
+    XCTAssertEqual(model.activeLease?.remoteName, "Helper")
+    try await capture(StatusView(), "active-by-remote")
+    try await capture(UnlockMethodsView(), "unlock-methods-after-unlock")
+    model.lockNow()
+    XCTAssertNil(model.activeLease)
     model.askGuardian()
     try await capture(PINView(), "pin", navigation: false)
     try await capture(PINView(), "pin-accessibility5-top", size: .accessibility5, navigation: false)
@@ -1000,6 +1073,7 @@ private final class NativeScheduler: ActivityScheduling {
         var lease = Lease(now: day + Double(start * 60), expiresAt: day + Double(end * 60))
         lease.activatedAt = lease.requestedAt
         lease.state = .ended
+        if offset == 1 && start == 1200 { lease.remoteName = "Helper" }
         historyControl.leases.append(lease)
       }
     }
@@ -1008,6 +1082,7 @@ private final class NativeScheduler: ActivityScheduling {
       byAdding: .day, value: -1, to: CivilTime.calendar.startOfDay(for: h.clock.now))!
     let selected = historyState.selected
     try await capture(history, "history-time-selected-day")
+    try await capture(history, "history-remote-attribution")
     historyState.measure = 1
     try await capture(history, "history-count-selected-day")
     XCTAssertEqual(historyState.selected, selected)

@@ -1,0 +1,16 @@
+{
+  "public_predecessor": "2e04a43e287cd0b601bee1e5e3c451ce964c7444",
+  "public_repository": "https://github.com/charlieellington/calm-phone",
+  "entity_module": "Quiet",
+  "synthetic": true,
+  "files": {
+    "Package.swift": "b5f8c840eb59c8f576b21047f48d0f890e0875f6a5febbc2b344d5adf6fa45d1",
+    "Sources/CSQLite/module.modulemap": "c121281d5395a9bb1c92e3110af7c157d34222dcde8fdd785ff5c427a62af902",
+    "Sources/CSQLite/shim.h": "b052d8e561e942f97b503033ecd2eaa2b35213bdbf374983efe9e68eabdfc024",
+    "Sources/Quiet/UnlockInterval.swift": "e202d305bed2086a6a9685b87035adc63a4a01690aa7e17a35e514bbd82d60a2",
+    "Sources/QuietCore/ControlDatabase.swift": "0b65601a35cc6e77a7f160b801476e0462d02d0b4a9ad9ec1422630e85a983f7",
+    "Sources/QuietCore/Credential.swift": "c67788c91377e0ad91286b873a3f1c50688a20c5f3b3cd257a8b723e0290cb4a",
+    "Sources/QuietCore/GrantDraft.swift": "4b2bdfd1d223c19e5cad6a1ae300a9b2e85803a66bcf1481bd2ba0668222e486",
+    "Sources/QuietCore/Policy.swift": "b1d5d07c770c18d2c720775a979f4e6c3b83d98c991b616ece7fd2d775900f1f"
+  }
+}

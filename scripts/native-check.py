@@ -19,7 +19,10 @@ command = ['xcodebuild', '-project', 'Quiet.xcodeproj', '-scheme', 'Quiet',
            '-configuration', 'Release' if lane == 'release' else 'Debug',
            '-derivedDataPath', '.build/DerivedData', '-resultBundlePath', result_path,
            'CODE_SIGNING_ALLOWED=NO']
-if lane == 'test':
+if lane in ('test', 'ui', 'debug', 'release'):
+    if not (root / '.build/Build6Fixture/provenance.json').exists():
+        subprocess.run(['python3', 'scripts/prepare-build6-fixture.py'], check=True)
+if lane in ('test', 'ui'):
     identifier = os.environ.get('QUIET_SIMULATOR_ID')
     if not identifier:
         devices = json.loads(subprocess.check_output(['xcrun', 'simctl', 'list', 'devices', 'available', '--json']))
@@ -27,13 +30,15 @@ if lane == 'test':
         if not candidates:
             sys.exit('No installed iPhone 17 Pro simulator. Host tests and generic-device builds remain available.')
         identifier = candidates[0]['udid']
-    command += ['-destination', f'platform=iOS Simulator,id={identifier}', 'test']
+    command += ['-destination', f'platform=iOS Simulator,id={identifier}', '-parallel-testing-enabled', 'NO', 'test']
+    if lane == 'ui': command += ['-only-testing:QuietUITests']
+    subprocess.run(['xcrun', 'simctl', 'bootstatus', identifier, '-b'], check=True)
 elif lane == 'debug':
     command += ['-destination', 'generic/platform=iOS', 'build']
 elif lane == 'release':
     command += ['-destination', 'generic/platform=iOS', '-archivePath', '.build/Quiet-unsigned.xcarchive', 'archive']
 else:
-    sys.exit('Expected test, debug, or release')
+    sys.exit('Expected test, ui, debug, or release')
 
 def sanitize(text):
     text = text.replace(str(root), '<repo>').replace(str(Path.home()), '<home>')
@@ -42,6 +47,12 @@ def sanitize(text):
 evidence_dir = root / os.environ.get('QUIET_NATIVE_EVIDENCE_DIR', '.build/evidence')
 evidence_dir.mkdir(parents=True, exist_ok=True)
 log = evidence_dir / f'{lane}-{stamp}.log'
+url_process = None
+url_log = None
+if lane in ('test', 'ui'):
+    url_log = (evidence_dir / f'{lane}-urls.log').open('w')
+    url_process = subprocess.Popen(['python3', 'scripts/deliver-native-urls.py', '--simulator', identifier,
+        '--output', str(evidence_dir / f'{lane}-urls')], stdout=url_log, stderr=subprocess.STDOUT)
 capture_process = None
 capture_log = None
 if lane == 'test':
@@ -74,6 +85,47 @@ if capture_process:
         capture_process.terminate()
         capture_process.wait()
     capture_log.close()
+if url_process:
+    if url_process.poll() is not None:
+        print('Warm URL helper exited unexpectedly; see URL log')
+        code = code or 1
+    else:
+        url_process.terminate()
+        url_process.wait()
+    url_log.close()
+if lane in ('test', 'ui') and Path(result_path).exists():
+    for kind in ['summary', 'tests']:
+        exported = subprocess.run(['xcrun', 'xcresulttool', 'get', 'test-results', kind, '--path', result_path], capture_output=True, text=True)
+        if exported.returncode == 0:
+            (evidence_dir / f'{lane}-{kind}.json').write_text(exported.stdout)
+        else:
+            print(exported.stderr)
+            code = code or 1
+    subprocess.run(['xcrun', 'xcresulttool', 'export', 'attachments', '--path', result_path,
+                    '--output-path', str(evidence_dir / f'{lane}-attachments')], check=True)
+if lane in ('test', 'ui'):
+    try:
+        nodes = json.loads((evidence_dir / f'{lane}-tests.json').read_text())
+        def cases(value):
+            if isinstance(value, dict):
+                if value.get('nodeType') == 'Test Case': yield value
+                for child in value.values(): yield from cases(child)
+            elif isinstance(value, list):
+                for child in value: yield from cases(child)
+        rows = list(cases(nodes))
+        skipped = [r for r in rows if r['result'] == 'Skipped']
+        for row in skipped:
+            assert row['nodeIdentifier'] == 'RemoteTests/testKeychainRecordsRoundTripAndLeaveTheSimulatorClean()'
+            assert 'Diagnosed Security write status -34018 (errSecMissingEntitlement)' in str(row)
+        sources = ['QuietUITests/QuietUITests.swift']
+        if lane == 'test': sources += ['QuietTests/QuietTests.swift', 'QuietTests/RemoteTests.swift']
+        required = {name + '()' for path in sources for name in re.findall(r'func (test\w+)\(', Path(path).read_text())}
+        assert required <= {r['name'] for r in rows}, 'Native tests missing from result'
+        (evidence_dir / f'{lane}-skip-audit.json').write_text(json.dumps({'expected_tests':len(required),
+            'observed_tests':len(rows), 'allowed_skips':skipped, 'unexpected_skips':0}, indent=2))
+    except Exception as failure:
+        print('Native result/skip audit failed:', failure)
+        code = code or 1
 receipt = {'lane': lane, 'source_head': sha, 'working_tree_dirty': bool(subprocess.check_output(['git', 'status', '--porcelain'])),
            'command': sanitize(' '.join(command)), 'exit_code': code, 'log': str(log.relative_to(root)),
            'log_sha256': hashlib.sha256(log.read_bytes()).hexdigest(), 'xcresult': result_path,

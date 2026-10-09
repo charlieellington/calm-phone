@@ -36,13 +36,27 @@ enum GuardianSheet: String, Identifiable {
   @Published var now: Date
   @Published private(set) var historyContainer: ModelContainer?
   @Published private(set) var historyError: String?
+  // Remote unlock (RemoteModel.swift): who may unlock this phone, and which phones this one may unlock.
+  @Published var navigationEpoch = UUID()
+  @Published var remoteMetadataError: String?
+  @Published var remoteReadError: String?
+  @Published var connectionReadError: String?
+  @Published var remotes = RemoteRecord()
+  @Published var connections = ConnectionRecord()
+  @Published var linkOutcome: LinkOutcome?
+  @Published var choseRestrict = false
+  /// An unlock link opened before Screen Time status resolved; redeemed once it has, dropped on leaving.
+  var pendingLink: String?
+  let remoteStore: RemoteStorage
+  let connectionStore: ConnectionStoring
+  private(set) lazy var verifier = RemoteVerifier(store: remoteStore, clock: clock)
   private(set) var database: ControlDatabase?
   private(set) var coordinator: PolicyCoordinator?
   let pin: PINVerifier
   var operation = GuardianOperation.lease
   private var onVerified: ((GuardianAuthorization) throws -> Void)?
   private var authorization: GuardianAuthorization?
-  private let clock: () -> Date
+  let clock: () -> Date
   private let historyFactory: @MainActor () throws -> ModelContainer
   private let repair: () -> Void
   private let validatePolicy: (Policy) throws -> Void
@@ -59,9 +73,13 @@ enum GuardianSheet: String, Identifiable {
     screenTimeApproval: @escaping () -> Bool? = { ApplePolicy.authorizationApproval },
     requestScreenTimeAuthorization: @escaping @MainActor () async throws -> Void = {
       try await AuthorizationCenter.shared.requestAuthorization(for: .individual)
-    }
+    },
+    remoteStore: RemoteStorage = RemoteStore(),
+    connectionStore: ConnectionStoring = ConnectionStore()
   ) {
     self.clock = clock
+    self.remoteStore = remoteStore
+    self.connectionStore = connectionStore
     self.now = clock()
     self.historyFactory = historyFactory
     self.repair = repair
@@ -80,6 +98,7 @@ enum GuardianSheet: String, Identifiable {
       repair()
       self.error = QuietError.repairRequired.localizedDescription
     }
+    loadRemote()
   }
   func perform(failureMessage: String? = nil, _ action: () throws -> Void) {
     do {
@@ -94,6 +113,7 @@ enum GuardianSheet: String, Identifiable {
   }
   func refresh(preserveError: Bool = false) {
     now = clock()
+    loadRemote()
     guard let database, let coordinator else { return }
     do {
       // A surviving private credential cannot authorize fresh setup after App Group state loss.
@@ -121,6 +141,7 @@ enum GuardianSheet: String, Identifiable {
       if !preserveError { self.error = error.localizedDescription }
       return
     }
+    reconcileRemoteSuccess()
     if let historyContainer {
       do {
         try HistoryProjection.replay(state, into: historyContainer.mainContext, now: now)
@@ -152,7 +173,11 @@ enum GuardianSheet: String, Identifiable {
     }
     if restrictionsUnconfirmed { return .checkRestrictions }
     if !state.setupComplete {
-      return hasCredential && state.pendingPolicy != nil ? .finishSetup : .freshSetup
+      if hasCredential && state.pendingPolicy != nil { return .finishSetup }
+      if choseRestrict || state.pendingPolicy != nil { return .freshSetup }
+      // No restriction setup started: a remote's phone, or a fresh install choosing what it is for.
+      if connectionReadError != nil { return .remoteUnavailable }
+      return connections.connections.isEmpty ? .firstLaunch : .unlockOthers
     }
     if state.needsReselection || state.pendingPolicy != nil || !state.dailyRegistered || state.monitorFailed
       || !state.authorizationApproved || !hasCredential
@@ -165,6 +190,7 @@ enum GuardianSheet: String, Identifiable {
   var activeLease: Lease? { state.openLease.flatMap { $0.isActive(at: now) ? $0 : nil } }
   func prepareForeground() async {
     refresh()
+    defer { redeemPendingLink() }
     guard !needsControlRepair, state.setupComplete || state.pendingPolicy != nil else { return }
     if screenTimeApproval() == nil {
       checkingScreenTime = true
@@ -179,6 +205,7 @@ enum GuardianSheet: String, Identifiable {
     }
   }
   func foregroundTick() {
+    defer { if presentation != .checking { redeemPendingLink() } }
     now = clock()
     guard let database else { return }
     do {
@@ -195,11 +222,12 @@ enum GuardianSheet: String, Identifiable {
       self.error = error.localizedDescription
     }
   }
-  func background() {
+  func background(dropPendingLink: Bool = true) {
     authorization?.invalidate()
     authorization = nil
     grantDraft = nil
     onVerified = nil
+    if dropPendingLink { pendingLink = nil }
     // Keep incomplete setup reachable, but discard every backgrounded guardian capability.
     if sheet != .setup || state.setupComplete { sheet = nil }
   }
@@ -270,9 +298,19 @@ enum GuardianSheet: String, Identifiable {
   private func commitGrant() {
     perform(failureMessage: "Couldn’t unlock. Try again.") {
       defer { self.cancelGuardian() }
-      guard let coordinator, let authorization, let grantDraft else { throw QuietError.expiredAuthorization }
-      try coordinator.grant(grantDraft, authorization: authorization)
+      guard coordinator != nil, let authorization, let grantDraft else {
+        throw QuietError.expiredAuthorization
+      }
+      try openLease(grantDraft, authorization: authorization)
     }
+  }
+  /// The app's one lease path, shared by the PIN and a remote's link.
+  func openLease(
+    _ draft: GrantDraft, authorization: GuardianAuthorization, remoteName: String? = nil,
+    remoteID: String? = nil
+  ) throws {
+    guard let coordinator else { throw QuietError.repairRequired }
+    try coordinator.grant(draft, authorization: authorization, remoteName: remoteName, remoteID: remoteID)
   }
   func editPolicy() {
     request(.policy) { auth in
@@ -375,14 +413,21 @@ enum GuardianSheet: String, Identifiable {
 }
 
 @main struct QuietApp: App {
-  @StateObject private var model = QuietModel()
+  #if DEBUG && targetEnvironment(simulator)
+    @StateObject private var model = UITestApp.make()
+  #else
+    @StateObject private var model = QuietModel()
+  #endif
   @Environment(\.scenePhase) private var scenePhase
   var body: some Scene {
     WindowGroup {
       QuietRootView().environmentObject(model)
-        .onOpenURL { if let route = HomeRoute.parse($0) { model.route(route) } }
+        .onOpenURL { model.open($0) }
+        .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+          if let url = activity.webpageURL { model.open(url) }
+        }
         .onChange(of: scenePhase) { _, phase in
-          if phase != .active { model.background() }
+          if phase != .active { model.background(dropPendingLink: phase == .background) }
         }
         .task(id: scenePhase) {
           guard scenePhase == .active else { return }
@@ -404,6 +449,9 @@ struct QuietRootView: View {
       Group {
         switch model.presentation {
         case .locked, .active: StatusView()
+        case .firstLaunch: FirstLaunchView()
+        case .unlockOthers: UnlockOthersView()
+        case .remoteUnavailable: RemoteStorageUnavailableView()
         default: RecoveryView()
         }
       }
@@ -411,6 +459,7 @@ struct QuietRootView: View {
       .background(QuietDesign.paper.ignoresSafeArea())
       .foregroundStyle(QuietDesign.ink)
     }
+    .id(model.navigationEpoch)
     .tint(QuietDesign.sage)
     .preferredColorScheme(.dark)
     .task {
@@ -426,10 +475,28 @@ struct QuietRootView: View {
         case .newPIN: NewPINView()
         }
       }.environmentObject(model).preferredColorScheme(.dark)
+        .modifier(QuietErrorAlert(model: model))
         .onDisappear { if model.sheet == nil { model.cancelGuardian() } }
     }
-    .alert(
-      "Calm Phone", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })
+    .fullScreenCover(item: $model.linkOutcome) { outcome in
+      ConnectedView(outcome: outcome).environmentObject(model).preferredColorScheme(.dark)
+        .modifier(QuietErrorAlert(model: model))
+    }
+    .modifier(
+      QuietErrorAlert(model: model, enabled: model.sheet == nil && model.linkOutcome == nil))
+  }
+}
+
+/// Present refusals from the visible surface so an alert cannot dismiss an unfinished setup sheet.
+private struct QuietErrorAlert: ViewModifier {
+  @ObservedObject var model: QuietModel
+  var enabled = true
+  func body(content: Content) -> some View {
+    content.alert(
+      "Calm Phone",
+      isPresented: Binding(
+        get: { enabled && model.error != nil },
+        set: { if !$0 && enabled { model.error = nil } })
     ) {
       Button("OK") { model.error = nil }
     } message: {
@@ -441,3 +508,94 @@ struct QuietRootView: View {
 #Preview {
   QuietRootView().environmentObject(QuietModel())
 }
+
+#if DEBUG && targetEnvironment(simulator)
+  // Only compiled into Debug simulator builds. UI tests use a real root/navigation stack and private
+  // temporary storage; no Screen Time, production Keychain or enforcement writer is invoked.
+  private final class UITestCredentials: CredentialStorage {
+    var value: Credential?
+    func read() throws -> Credential? { value }
+    func write(_ credential: Credential, enrolling: Bool) throws { value = credential }
+  }
+  private final class UITestRemotes: RemoteStorage {
+    var value: RemoteRecord?
+    func read() throws -> RemoteRecord? { value }
+    func write(_ record: RemoteRecord) throws { value = record }
+  }
+  private final class UITestConnections: ConnectionStoring {
+    var value = ConnectionRecord()
+    func read() throws -> ConnectionRecord { value }
+    func write(_ record: ConnectionRecord) throws { value = record }
+  }
+  private final class UITestScheduler: ActivityScheduling {
+    var names: [String] = []
+    func registerDaily(_ policy: Policy) throws { names.append(policy.dailyName) }
+    func registerLease(_ lease: Lease) throws { names.append(lease.activityName) }
+    func isRegistered(_ name: String) -> Bool { names.contains(name) }
+    func stop(_ names: [String]) { self.names.removeAll { names.contains($0) } }
+  }
+
+  @MainActor private enum UITestApp {
+    static let pinText = String(repeating: "7", count: 6)
+    static func make() -> QuietModel {
+      guard let mode = ProcessInfo.processInfo.environment["CALM_UI_FIXTURE"] else { return QuietModel() }
+      do {
+        let marker = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+          .appendingPathComponent("CalmUITestProcess.json")
+        try JSONEncoder().encode(["instance": UUID().uuidString, "mode": mode]).write(to: marker)
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+          "ui-" + UUID().uuidString)
+        let database = try ControlDatabase(directory: directory)
+        let credentials = UITestCredentials()
+        let remotes = UITestRemotes()
+        let connections = UITestConnections()
+        let scheduler = UITestScheduler()
+        let pin = PINVerifier(
+          store: credentials, clock: { now }, salt: { Data(repeating: 7, count: 32) },
+          derive: { text, _, _ in Data(repeating: text == pinText ? 1 : 2, count: 32) })
+        let coordinator = PolicyCoordinator(
+          database: database, scheduler: scheduler, clock: { now },
+          approved: { true }, apply: { _ in })
+        if mode == "restricted" || mode == "dual" {
+          let policy = Policy(
+            allowed: [AppEntry(id: "messages", label: "Messages", token: "synthetic")],
+            limits: Policy.quotas.map {
+              LimitRule(app: AppEntry(id: $0.key, label: $0.key, token: $0.key), minutes: $0.value)
+            })
+          try coordinator.install(
+            policy, authorization: pin.enroll(pinText, confirmation: pinText, setupComplete: false))
+          var record = RemoteRecord()
+          record.phoneID = String(repeating: "B", count: 22)
+          record.generation = 1
+          record.ownerName = "Owner"
+          var remote = Remote(
+            id: String(repeating: "A", count: 22),
+            name: ProcessInfo.processInfo.environment["CALM_UI_REMOTE_NAME"] ?? "Helper",
+            secret: Data(repeating: 1, count: 32),
+            addedAt: now)
+          remote.generation = 1
+          record.remotes = [remote]
+          remotes.value = record
+        }
+        if mode == "helper" || mode == "dual" {
+          for (index, name) in ["Owner", String(repeating: "W", count: 40)].enumerated() {
+            let id = String(repeating: index == 0 ? "C" : "D", count: 22)
+            try connections.value.connect(
+              ConnectToken(
+                phoneID: id, generation: 1, remoteID: id,
+                secret: Data(repeating: 5, count: 32), ownerName: name), now: now)
+          }
+        }
+        return QuietModel(
+          pin: pin, clock: { now }, databaseFactory: { database },
+          coordinatorFactory: { _ in coordinator },
+          historyFactory: {
+            try ModelContainer(
+              for: UnlockInterval.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+          }, repair: {}, validatePolicy: { try $0.validate() }, screenTimeApproval: { true },
+          requestScreenTimeAuthorization: {}, remoteStore: remotes, connectionStore: connections)
+      } catch { fatalError("Isolated UI fixture failed: \(error)") }
+    }
+  }
+#endif

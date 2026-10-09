@@ -9,12 +9,15 @@ import SwiftUI
   var plannedEnd: Date
   var earlyEnd: Date?
   var relockedAt: Date?
+  /// Who unlocked by link; nil for the PIN. Optional, so existing stores migrate without a reset.
+  var remoteName: String?
   init(lease: Lease) {
     id = lease.id
     start = lease.activatedAt!
     plannedEnd = lease.expiresAt
     earlyEnd = lease.endedAt
     relockedAt = lease.relockedAt
+    remoteName = lease.remoteName
   }
   var lease: Lease {
     var lease = Lease(now: start, expiresAt: plannedEnd)
@@ -22,6 +25,7 @@ import SwiftUI
     lease.activatedAt = start
     lease.endedAt = earlyEnd
     lease.relockedAt = relockedAt
+    lease.remoteName = remoteName
     lease.state = earlyEnd == nil ? .active : .ended
     return lease
   }
@@ -50,6 +54,7 @@ import SwiftUI
       if let item = byID[lease.id] {
         item.earlyEnd = lease.endedAt
         item.relockedAt = lease.relockedAt
+        item.remoteName = lease.remoteName
       } else {
         context.insert(UnlockInterval(lease: lease))
       }
@@ -225,8 +230,11 @@ struct HistoryView: View {
         let end = min(lease.endedAt ?? lease.expiresAt, lease.expiresAt, day.interval.end, now)
         VStack(alignment: .leading, spacing: 6) {
           Text("\(timeLabel(start))–\(timeLabel(end))").monospacedDigit()
-          Text("Everything · \(DailyHistoryWindow.duration(max(0, end.timeIntervalSince(start))))")
-            .font(.footnote).foregroundStyle(QuietDesign.muted)
+          Text(
+            "Everything · \(DailyHistoryWindow.duration(max(0, end.timeIntervalSince(start))))"
+              + (lease.remoteName.map { " · \($0)" } ?? "")
+          )
+          .font(.footnote).foregroundStyle(QuietDesign.muted)
           if lease.activatedAt! < day.interval.start {
             Text("Continued access").font(.caption).foregroundStyle(QuietDesign.muted)
           }
